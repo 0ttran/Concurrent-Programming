@@ -165,6 +165,60 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+    char parseInput[MAXLINE];
+    char* argv[MAXARGS];
+    int bg = parseline(parseInput, argv);
+    pid_t pid;
+    sigset_t mask;
+
+    //Check for empty lines, ignore if there is
+    if(argv[0] == NULL)
+        return;
+
+    if(!builtin_cmd(argv)){
+        strcpy(parseInput, cmdline);
+        
+        //Masking
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGCHLD);
+        sigprocmask(SIG_BLOCK, &mask, 0);
+
+        //Checks if there is a forking error
+        if((pid = fork()) < 0){
+            printf("fork error\n");
+            return;
+        }
+
+        //Executes command
+        if(pid == 0){
+            setpgid(0,0);
+
+            if(execvp(argv[0], argv) < 0){
+                printf("No command called %s found.\n", argv[0]);
+                exit(0);
+            }
+        }
+        else{
+            //Wait for fg to finish
+
+            //Add to jobs list and set it's state to fg/bg
+            if(bg != 1)
+                addjob(jobs, pid, FG, cmdline);
+            else{
+                addjob(jobs, pid, BG, cmdline);
+                printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
+            }
+            sigprocmask(SIG_UNBLOCK, &mask, 0);
+            waitfg(pid);
+        }
+
+        /*
+        if(!bg){
+
+        }
+        */
+    }
+
     return;
 }
 
@@ -231,13 +285,23 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
-    if(strcmp(argv[0], "quit"))
+    if(!strcmp(argv[0], "quit")){
+
+        //Check for stopped jobs
+        int i;
+        for(i = 0; i < 16; i++){
+            if(jobs[i].state == ST){
+                printf("Has stopped jobs\n");
+                return 1;
+            }
+        }
         exit(0);
-    if(strcmp(argv[0], "&") == 0)
+    }
+    if(!strcmp(argv[0], "&") == 0)
         return 1;
-    if(strcmp(argv[0], "fg") == 0 || strcmp(argv[0], "bg") == 0){
+    if(!strcmp(argv[0], "fg") == 0 || !strcmp(argv[0], "bg") == 0)
         do_bgfg(argv);
-    if(strcmp(argv[0], "listjobs") == 0){
+    if(!strcmp(argv[0], "jobs") == 0){
         listjobs(jobs);
         return 1;
     }
@@ -251,16 +315,66 @@ int builtin_cmd(char **argv)
 void do_bgfg(char **argv) 
 {
     struct job_t *job;
+    char* args = argv[1];
+    int pid, jid;
 
-    if(argv != NULL){ //Check for input
-        char* args = argv[1];
+    //Checks args for fg/bg
+    if(args != NULL){ 
+
+        //Check job id
+        if(args[0] == '%' && isdigit(args[1])){
+            jid = atoi(&args[1]);
+            job = getjobjid(jobs, jid);
+            if(!job){
+                printf("no job: %s\n", args);
+                return;
+            }
+        }
+        //Check proc id
+        else if(isdigit(*argv[1])){
+            pid = atoi(&args[0]);
+            job = getjobpid(jobs, pid);
+            if(!job){
+                printf("no process: %s\n", argv[1]);
+                return;
+            }
+        }
+        else{
+            printf("Incorrect input, requires a PID or  JID]\n");
+            return;
+        }           
 
     }
     else{
-        printf("")
-        return
+        printf("Incorrect input, requires a PID or  JID]\n");
+        return;
+    }
+
+    if(job != NULL){
+        pid = job->pid;
+
+        if(job->state == ST){
+            if(!strcmp(argv[0], "fg")){
+                job->state = FG;
+                kill(-pid, SIGCONT);
+                waitfg(job->pid);
+            }
+            if(!strcmp(argv[0], "bg")){
+                job->state = BG;
+                printf("[%d] (%d)\n", job->jid, job->pid);
+                kill(-pid, SIGCONT);
+            }
+        }
+        if(job->state == BG){
+            if(!strcmp(argv[0], "fg")){
+                job->state = FG;
+                waitfg(job->pid);
+            }
+        }
+
     }
     return;
+    
 }
 
 /* 
