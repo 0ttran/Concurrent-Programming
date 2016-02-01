@@ -1,7 +1,7 @@
 /* 
  * tsh - A tiny shell program with job control
  * 
- * <Put your name and ID here>
+ * Tien Tran 861045781
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -231,6 +231,17 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
+    if(strcmp(argv[0], "quit"))
+        exit(0);
+    if(strcmp(argv[0], "&") == 0)
+        return 1;
+    if(strcmp(argv[0], "fg") == 0 || strcmp(argv[0], "bg") == 0){
+        do_bgfg(argv);
+    if(strcmp(argv[0], "listjobs") == 0){
+        listjobs(jobs);
+        return 1;
+    }
+    
     return 0;     /* not a builtin command */
 }
 
@@ -239,6 +250,16 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
+    struct job_t *job;
+
+    if(argv != NULL){ //Check for input
+        char* args = argv[1];
+
+    }
+    else{
+        printf("")
+        return
+    }
     return;
 }
 
@@ -247,6 +268,12 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+    struct job_t* currProc = getjobpid(jobs, pid);
+
+    //While the current state of the process is in the foreground sleep
+    while(currProc->state == FG)
+        sleep(1);
+
     return;
 }
 
@@ -263,6 +290,28 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
+    pid_t currPID;
+    int status;
+
+    while((currPID = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0){
+        //Check if child ended normally
+        if(WIFEXITED(status))
+            deletejob(jobs, currPID);
+
+        //Check if child is stopped
+        if(WIFSTOPPED(status)){
+            //Change the state of the proccess to stopped
+            //and print to user that process has been stopped
+            struct job_t* job = getjobpid(jobs, currPID);
+            job->state = ST;
+            printf("job[%d] stopped by signal: %i", pid2jid(currPID), SIGTSTP);
+
+        }
+
+        //Check if child ended due to a signal
+        if(WIFSIGNALED(status))
+            deletejob(jobs, currPID);
+    }
     return;
 }
 
@@ -273,6 +322,9 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
+    pid_t currPID = fgpid(jobs);
+    if (fgpid(jobs) > 0) 
+        kill(-currPID, SIGINT); 
     return;
 }
 
@@ -283,6 +335,9 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+    pid_t currPID = fgpid(jobs);
+    if (fgpid(jobs) > 0) 
+        kill(-currPID, SIGTSTP); 
     return;
 }
 
