@@ -321,7 +321,7 @@ void do_bgfg(char **argv)
     //Checks args for fg/bg
     if(args != NULL){ 
 
-        //Check job id
+        //Check job id, process id
         if(args[0] == '%' && isdigit(args[1])){
             jid = atoi(&args[1]);
             job = getjobjid(jobs, jid);
@@ -349,21 +349,34 @@ void do_bgfg(char **argv)
         return;
     }
 
+    /*
+    if(!job){
+
+    }
+    */
+
+
+    //Checks the job state if the state of a job is stopped
+    //Then make sure to kill any fg/bg jobs.
     if(job != NULL){
         pid = job->pid;
 
         if(job->state == ST){
+            //Check fg/bg 
+            //Kill fg job
             if(!strcmp(argv[0], "fg")){
                 job->state = FG;
                 kill(-pid, SIGCONT);
                 waitfg(job->pid);
             }
+            //Kill bg job
             if(!strcmp(argv[0], "bg")){
                 job->state = BG;
                 printf("[%d] (%d) %s", job->jid, job->pid, job->cmdline);
                 kill(-pid, SIGCONT);
             }
         }
+        //Wait for job to complete
         if(job->state == BG){
             if(!strcmp(argv[0], "fg")){
                 job->state = FG;
