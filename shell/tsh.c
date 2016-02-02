@@ -174,6 +174,7 @@ void eval(char *cmdline)
 
     strcpy(parseInput, cmdline);
     bg = parseline(parseInput, argv);
+
     //Check for empty lines, ignore if there is
     if(argv[0] == NULL)
         return;
@@ -296,8 +297,10 @@ int builtin_cmd(char **argv)
     }
     if(!strcmp(argv[0], "&"))
         return 1;
-    if(!strcmp(argv[0], "fg")|| !strcmp(argv[0], "bg"))
+    if(!strcmp(argv[0], "fg")|| !strcmp(argv[0], "bg")){
         do_bgfg(argv);
+        return 1;
+    }
     if(!strcmp(argv[0], "jobs")){
         listjobs(jobs);
         return 1;
@@ -369,6 +372,7 @@ void do_bgfg(char **argv)
         }
 
     }
+    
     return;
     
 }
@@ -439,9 +443,10 @@ void sigchld_handler(int sig)
 void sigint_handler(int sig) 
 {
     pid_t currPID = fgpid(jobs);
-    if (fgpid(jobs) != 0) 
+    if (currPID != 0) 
         kill(-currPID, SIGINT); 
-    return;
+    else
+        return;
 }
 
 /*
@@ -452,9 +457,10 @@ void sigint_handler(int sig)
 void sigtstp_handler(int sig) 
 {
     pid_t currPID = fgpid(jobs);
-    if (fgpid(jobs) != 0) 
+    if (currPID != 0) 
         kill(-currPID, SIGTSTP); 
-    return;
+    else
+        return;
 }
 
 /*********************
